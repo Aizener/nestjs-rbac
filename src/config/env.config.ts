@@ -7,6 +7,7 @@ const envSchema = z.object({
     .string()
     .min(1, 'ALLOWED_ORIGINS is required.')
     .transform((val) => val.split(',').map((origin) => origin.trim())),
+  JWT_CONSTANTS: z.string().min(1, 'JWT_CONSTANTS is required.'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
@@ -20,4 +21,5 @@ type envType = z.infer<typeof envSchema>;
 export const env = {
   PORT: parsedEnv.data.PORT,
   ALLOWED_ORIGINS: parsedEnv.data.ALLOWED_ORIGINS,
+  JWT_CONSTANTS: parsedEnv.data.JWT_CONSTANTS,
 } satisfies envType;
