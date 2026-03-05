@@ -1,13 +1,32 @@
-import { Controller, Get, Post, UseGuards, Request } from '@nestjs/common';
+import type { Cache } from 'cache-manager';
+import type { Request } from 'express';
 
-import { TestService } from './test.service';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import {
+  Controller,
+  Get,
+  Inject,
+  Post,
+  Query,
+  Request as Req,
+  UseGuards,
+} from '@nestjs/common';
+
+import type { AuthUser, TokenPair } from '../auth/auth.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LocalAuthGuard } from '../auth/guards/local-auth.guard';
+import { TestService } from './test.service';
+
+type RequestWithUser = Request & { user: AuthUser };
 
 @Controller('test')
 export class TestController {
-  constructor(private readonly testService: TestService, private authService: AuthService) {}
+  constructor(
+    private readonly testService: TestService,
+    private authService: AuthService,
+    @Inject(CACHE_MANAGER) private cacheManager: Cache,
+  ) {}
 
   @Get()
   getHello(): { msg: string } {
@@ -16,15 +35,37 @@ export class TestController {
 
   @UseGuards(LocalAuthGuard)
   @Post('auth/login')
-  async login(@Request() req) {
-    console.log('req login', req.user);
+  async login(@Req() req: RequestWithUser): Promise<TokenPair> {
     return this.authService.login(req.user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
-  getProfile(@Request() req) {
-    console.log('req profile', req.user);
+  getProfile(@Req() req: RequestWithUser): AuthUser {
     return req.user;
+  }
+
+  /** 调试：根据 key 查看缓存值，如 ?key=access_token:1:jti 或 ?key=user_sessions:1 */
+  @Get('cache')
+  async getCache(@Query('key') key: string) {
+    const value = await this.cacheManager.get(key);
+    return { key, value: value ?? null };
+  }
+
+  /** 调试：查看所有缓存条目 */
+  @Get('cache/all')
+  async getAllCache(): Promise<Record<string, unknown>> {
+    const cache = this.cacheManager as {
+      stores?: Array<{ iterator?: () => AsyncGenerator<[string, unknown]> }>;
+    };
+    const store = cache.stores?.[0];
+    if (!store?.iterator) {
+      return {};
+    }
+    const entries: Record<string, unknown> = {};
+    for await (const [key, value] of store.iterator()) {
+      entries[key] = value;
+    }
+    return entries;
   }
 }

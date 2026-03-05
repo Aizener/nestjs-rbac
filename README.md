@@ -122,6 +122,96 @@ src/
 
 ---
 
+# 🔐 认证流程与前端接入
+
+## 认证流程概览
+
+```
+┌─────────────┐    ① 登录      ┌─────────────┐    返回 access_token    ┌─────────────┐
+│   前端      │ ──────────────► │  POST       │ ─────────────────────► │   前端      │
+│             │  username+      │  /auth/login│                         │  存储 token │
+│             │  password      │             │                         │             │
+└─────────────┘                └─────────────┘                         └─────────────┘
+       │                               │                                      │
+       │                               │ ② 服务端缓存 access_token             │
+       │                               │    (access_token:userId)             │
+       │                               ▼                                      │
+       │                        ┌─────────────┐                               │
+       │    ③ 请求业务接口       │   Cache     │    ④ 校验 JWT + 缓存匹配       │
+       │ ─────────────────────►│  (Keyv)     │ ◄─────────────────────────────┘
+       │  Header: Authorization │             │
+       │  Bearer <access_token> │             │  ⑤ 一致才放行，可立即撤销
+       └───────────────────────►└─────────────┘
+```
+
+## 接口说明
+
+| 接口 | 方法 | 说明 | 需要认证 |
+|------|------|------|----------|
+| `/api/v1/auth/login` | POST | 登录，返回 access_token | 否 |
+| `/api/v1/auth/logout` | POST | 登出当前设备 | 是（Bearer） |
+| `/api/v1/auth/logout-all` | POST | 登出全部设备 | 是（Bearer） |
+
+## 前端接入步骤
+
+### 1. 登录
+
+```javascript
+// POST /api/v1/auth/login
+const res = await fetch('http://localhost:3000/api/v1/auth/login', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    username: 'admin',   // passport-local 默认字段名
+    password: 'admin123',
+  }),
+});
+
+const { access_token } = await res.json();
+localStorage.setItem('access_token', access_token);
+```
+
+### 2. 请求业务接口
+
+```javascript
+const res = await fetch('http://localhost:3000/api/v1/xxx', {
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+  },
+});
+```
+
+### 3. 登出
+
+```javascript
+// 登出当前设备
+await fetch('http://localhost:3000/api/v1/auth/logout', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+  },
+});
+
+// 登出全部设备
+await fetch('http://localhost:3000/api/v1/auth/logout-all', {
+  method: 'POST',
+  headers: {
+    Authorization: `Bearer ${localStorage.getItem('access_token')}`,
+  },
+});
+
+localStorage.removeItem('access_token');
+```
+
+## 重要说明
+
+- **access_token**：24 小时有效，存缓存，校验时比对，**可立即撤销**
+- **无 refresh**：过期后需重新登录
+- **多设备**：最多 5 个会话，超出时踢掉最旧
+- **CORS**：需在 `.env` 的 `ALLOWED_ORIGINS` 中配置前端域名
+
+---
+
 # 🔐 权限控制流程
 
 1. 用户登录

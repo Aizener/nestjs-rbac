@@ -1,30 +1,43 @@
+import type { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { PassportStrategy } from '@nestjs/passport';
-import { Injectable } from '@nestjs/common';
 import { env } from 'src/config';
 
+import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { PassportStrategy } from '@nestjs/passport';
+
+import { AuthService } from '../auth.service';
+
+const extractBearerToken = ExtractJwt.fromAuthHeaderAsBearerToken();
+
 /**
- * JWT 认证策略
- * 使用 passport-jwt 策略处理 JWT Token 验证
+ * JWT 校验：验证签名与过期 + 缓存匹配
+ * 缓存存在且与请求 token 一致才放行，支持立即撤销
  */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private authService: AuthService) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: extractBearerToken,
       ignoreExpiration: false,
       secretOrKey: env.JWT_CONSTANTS,
+      passReqToCallback: true,
     });
   }
 
-  /**
-   * 验证 JWT Token 并解析用户信息
-   * Passport 会自动调用此方法进行认证
-   * 验证通过的用户将被挂载到 Request 对象上 (req.user)
-   * @param payload - JWT Token 中的载荷（包含 sub 和 username）
-   * @returns 解析后的用户信息（userId 和 username）
-   */
-  async validate(payload: any) {
-    return { userId: payload.sub, username: payload.username };
+  async validate(
+    req: Request,
+    payload: { sub: number; username: string; jti: string },
+  ) {
+    const { sub, username, jti } = payload;
+    if (!jti) throw new UnauthorizedException('Invalid token');
+
+    const token = extractBearerToken(req);
+    if (!token) throw new UnauthorizedException('Token not found');
+
+    const valid = await this.authService.validateAccessToken(sub, jti, token);
+    if (!valid) {
+      throw new UnauthorizedException('Token not found in cache or revoked');
+    }
+    return { userId: sub, username, jti };
   }
 }
