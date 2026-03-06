@@ -1,0 +1,80 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ============ RBAC 表结构 ============
+// 多设备 JWT 会话由缓存管理，此处仅存储用户与角色权限
+// 权限设计兼容 CASL：subject(资源) + action(操作)
+
+/// 用户表。id 对应 JWT payload 的 sub
+model User {
+  id        Int      @id @default(autoincrement()) // 主键，对应 JWT sub
+  username  String   @unique // 登录用户名
+  password  String // 密码（建议存储 bcrypt 哈希）
+  roles     UserRole[] // 用户拥有的角色
+  sessions  Session[] // 登录会话（多设备）
+  createdAt DateTime @default(now()) // 创建时间
+  updatedAt DateTime @updatedAt // 更新时间
+}
+
+/// 会话表。与缓存中的 access_token:userId:jti 对应，存持久化元数据
+/// 校验仍用缓存，此表用于「我的设备」列表、审计、登出时清理
+model Session {
+  id           Int       @id @default(autoincrement()) // 主键
+  userId       Int // 用户 id
+  jti          String    @unique // JWT ID，关联缓存 key
+  ip           String? // 登录 IP
+  userAgent    String? // 浏览器/设备信息
+  deviceName   String? // 设备名称，用户可自定义（如「我的手机」）
+  loginAt      DateTime  @default(now()) // 登录时间
+  lastActiveAt DateTime? // 最近活跃时间，请求时更新，用于「最近活跃」排序
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+}
+
+/// 角色表。一个用户可拥有多个角色
+model Role {
+  id          Int              @id @default(autoincrement()) // 主键
+  name        String           @unique // 角色名，如 admin、editor
+  users       UserRole[] // 拥有该角色的用户
+  permissions RolePermission[] // 该角色具备的权限
+  createdAt   DateTime         @default(now()) // 创建时间
+  updatedAt   DateTime         @updatedAt // 更新时间
+}
+
+/// 权限表。CASL 格式：subject=资源类型，action=操作
+/// 示例：subject="Article" action="create" => ability.can('create','Article')
+model Permission {
+  id      Int              @id @default(autoincrement()) // 主键
+  subject String // 资源类型，如 User、Article
+  action  String // 操作：create、read、update、delete、manage
+  roles   RolePermission[] // 拥有该权限的角色
+  @@unique([subject, action])
+}
+
+/// 用户-角色关联表
+model UserRole {
+  userId Int // 用户 id
+  roleId Int // 角色 id
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role   Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  @@id([userId, roleId])
+}
+
+/// 角色-权限关联表
+model RolePermission {
+  roleId       Int // 角色 id
+  permissionId Int // 权限 id
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  @@id([roleId, permissionId])
+}

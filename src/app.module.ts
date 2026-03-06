@@ -4,6 +4,7 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { Module } from '@nestjs/common';
 
 import { AuthModule } from './modules/auth/auth.module';
+import { PrismaModule } from './modules/prisma/prisma.module';
 import { TestController } from './modules/test/test.controller';
 import { TestService } from './modules/test/test.service';
 import { UsersModule } from './modules/users/users.module';
@@ -24,6 +25,7 @@ import { UsersModule } from './modules/users/users.module';
     }),
     AuthModule,
     UsersModule,
+    PrismaModule,
   ],
   controllers: [TestController],
   providers: [TestService],

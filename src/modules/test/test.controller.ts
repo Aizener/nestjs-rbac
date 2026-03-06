@@ -1,5 +1,6 @@
 import type { Cache } from 'cache-manager';
 import type { Request } from 'express';
+import { User } from 'generated/prisma/client';
 
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import {
@@ -16,6 +17,7 @@ import type { AuthUser, TokenPair } from '../auth/auth.service';
 import { AuthService } from '../auth/auth.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { LocalAuthGuard } from '../auth/guards/local-auth.guard';
+import { PrismaService } from '../prisma/prisma.service';
 import { TestService } from './test.service';
 
 type RequestWithUser = Request & { user: AuthUser };
@@ -26,11 +28,18 @@ export class TestController {
     private readonly testService: TestService,
     private authService: AuthService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
+    private readonly prismaService: PrismaService,
   ) {}
 
   @Get()
   getHello(): { msg: string } {
     return this.testService.getHello();
+  }
+
+  @Get('prisma')
+  async getPrisma(): Promise<{ msg: string; users: User[] }> {
+    const users = await this.prismaService.user.findMany();
+    return { msg: `Found ${users.length} users`, users };
   }
 
   @UseGuards(LocalAuthGuard)
