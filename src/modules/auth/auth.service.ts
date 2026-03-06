@@ -1,3 +1,4 @@
+import argon2 from 'argon2';
 import type { Cache } from 'cache-manager';
 import { randomUUID } from 'node:crypto';
 
@@ -14,7 +15,7 @@ import {
 
 /** 认证后的用户信息（不含密码） */
 export interface AuthUser {
-  userId: number;
+  userId: string;
   username: string;
 }
 
@@ -25,7 +26,7 @@ export interface TokenPair {
 
 /** JWT payload 结构 */
 export interface JwtPayload {
-  sub: number;
+  sub: string;
   username: string;
   jti: string;
 }
@@ -61,13 +62,12 @@ export class AuthService {
    * @param pass - 明文密码
    * @returns 校验通过返回用户信息（不含密码），否则返回 null
    */
-  validateUser(username: string, pass: string): AuthUser | null {
-    const user = this.usersService.findOne(username);
-    if (user && user.password === pass) {
-      const { password, ...result } = user;
-      return result;
-    }
-    return null;
+  async validateUser(username: string, pass: string): Promise<AuthUser | null> {
+    const user = await this.usersService.findOne(username);
+    if (!user) return null;
+    const isMatch = await argon2.verify(user.password, pass);
+    if (!isMatch) return null;
+    return { userId: user.id, username: user.username };
   }
 
   /**
@@ -110,7 +110,7 @@ export class AuthService {
    * @param jti - 当前会话的 JWT ID
    * @returns 登出结果，含被撤销的 jti 及剩余会话数
    */
-  async logout(userId: number, jti: string): Promise<LogoutResult> {
+  async logout(userId: string, jti: string): Promise<LogoutResult> {
     await this.cacheManager.del(
       `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${userId}:${jti}`,
     );
@@ -132,7 +132,7 @@ export class AuthService {
    * @param userId - 用户 ID
    * @returns 登出结果，含撤销的会话数量及 jti 列表
    */
-  async logoutAll(userId: number): Promise<LogoutAllResult> {
+  async logoutAll(userId: string): Promise<LogoutAllResult> {
     const sessions = await this.getSessions(userId);
     await Promise.all([
       ...sessions.map((jti) =>
@@ -157,7 +157,7 @@ export class AuthService {
    * @returns 缓存存在且与 token 一致返回 true，否则 false
    */
   async validateAccessToken(
-    userId: number,
+    userId: string,
     jti: string,
     token: string,
   ): Promise<boolean> {
@@ -172,7 +172,7 @@ export class AuthService {
    * @param userId - 用户 ID
    * @returns jti 数组
    */
-  private async getSessions(userId: number): Promise<string[]> {
+  private async getSessions(userId: string): Promise<string[]> {
     const raw = await this.cacheManager.get<string>(
       `${CACHE_KEY_PREFIX.USER_SESSIONS}${userId}`,
     );
@@ -191,7 +191,7 @@ export class AuthService {
    * @param sessions - jti 数组（最新在前）
    */
   private async saveSessions(
-    userId: number,
+    userId: string,
     sessions: string[],
   ): Promise<void> {
     await this.cacheManager.set(

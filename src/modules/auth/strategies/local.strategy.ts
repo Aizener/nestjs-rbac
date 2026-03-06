@@ -24,8 +24,8 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
    * @returns 验证通过的用户对象（不含密码）
    * @throws UnauthorizedException 当凭据无效时抛出
    */
-  validate(username: string, password: string): AuthUser {
-    const user = this.authService.validateUser(username, password);
+  async validate(username: string, password: string): Promise<AuthUser> {
+    const user = await this.authService.validateUser(username, password);
     if (!user) {
       throw new UnauthorizedException('用户名或密码错误');
     }
