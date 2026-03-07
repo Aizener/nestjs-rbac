@@ -29,14 +29,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     payload: { sub: string; username: string; jti: string },
   ) {
     const { sub, username, jti } = payload;
-    if (!jti) throw new UnauthorizedException('Invalid token');
+    if (!jti) throw new UnauthorizedException('Token 无效');
 
     const token = extractBearerToken(req);
-    if (!token) throw new UnauthorizedException('Token not found');
+    if (!token) throw new UnauthorizedException('未提供或未找到 Token');
 
     const valid = await this.authService.validateAccessToken(sub, jti, token);
     if (!valid) {
-      throw new UnauthorizedException('Token not found in cache or revoked');
+      throw new UnauthorizedException('Token 未在缓存中或已失效');
     }
     return { userId: sub, username, jti };
   }

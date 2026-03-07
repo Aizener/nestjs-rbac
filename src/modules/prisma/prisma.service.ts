@@ -28,7 +28,7 @@ export class PrismaService
       this.logger.log('Database Connected.');
     } catch (error) {
       this.logger.error(
-        `Failed to connect to the database: ${error instanceof Error ? error.stack : 'Unknown error'}.`,
+        `数据库连接失败: ${error instanceof Error ? error.stack : '未知错误'}`,
       );
       throw error;
     }

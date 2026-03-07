@@ -2,18 +2,18 @@ import 'dotenv/config';
 import { z } from 'zod';
 
 const envSchema = z.object({
-  PORT: z.string().min(1, 'PORT is required.').default('3000'),
+  PORT: z.string().min(1, 'PORT 为必填项').default('3000'),
   ALLOWED_ORIGINS: z
     .string()
-    .min(1, 'ALLOWED_ORIGINS is required.')
+    .min(1, 'ALLOWED_ORIGINS 为必填项')
     .transform((val) => val.split(',').map((origin) => origin.trim())),
-  JWT_CONSTANTS: z.string().min(1, 'JWT_CONSTANTS is required.'),
+  JWT_CONSTANTS: z.string().min(1, 'JWT_CONSTANTS 为必填项'),
 });
 
 const parsedEnv = envSchema.safeParse(process.env);
 
 if (!parsedEnv.success) {
-  throw new Error(`Invalid environment variables: ${parsedEnv.error.message}`);
+  throw new Error(`环境变量校验失败: ${parsedEnv.error.message}`);
 }
 
 type envType = z.infer<typeof envSchema>;
