@@ -3,9 +3,10 @@ import type { Cache } from 'cache-manager';
 import { randomUUID } from 'node:crypto';
 
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Inject, Injectable, UnauthorizedException } from '@nestjs/common';
+import { Inject, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
+import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import {
   CACHE_KEY_PREFIX,
@@ -17,6 +18,13 @@ import {
 export interface AuthUser {
   userId: string;
   username: string;
+}
+
+/** 登录时写入 Session 表的可选元数据（IP、UA、设备名等） */
+export interface SessionMeta {
+  ip?: string;
+  userAgent?: string;
+  deviceName?: string;
 }
 
 /** 登录成功返回的 token 结构 */
@@ -53,6 +61,7 @@ export class AuthService {
   constructor(
     private usersService: UsersService,
     private jwtService: JwtService,
+    private prisma: PrismaService,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
@@ -71,20 +80,24 @@ export class AuthService {
   }
 
   /**
-   * 登录：生成 access_token 并存入缓存，支持多设备
+   * 登录：生成 access_token 并存入缓存与 Session 表，支持多设备
    * @param user - 已校验用户信息
+   * @param meta - 可选会话元数据（ip、userAgent、deviceName），用于 Session 表
    * @returns 包含 access_token 的对象
-   * @remarks 超出最大会话数时踢掉最旧会话
+   * @remarks 超出最大会话数时踢掉最旧会话（缓存 + Session 表同步删除）
    */
-  async login(user: AuthUser): Promise<TokenPair> {
+  async login(user: AuthUser, meta?: SessionMeta): Promise<TokenPair> {
     const jti = randomUUID();
     const sessions = await this.getSessions(user.userId);
 
     if (sessions.length >= MAX_SESSIONS_PER_USER) {
       const oldestJti = sessions.pop()!;
-      await this.cacheManager.del(
-        `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${user.userId}:${oldestJti}`,
-      );
+      await Promise.all([
+        this.cacheManager.del(
+          `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${user.userId}:${oldestJti}`,
+        ),
+        this.prisma.session.deleteMany({ where: { jti: oldestJti } }),
+      ]);
     }
     sessions.unshift(jti);
 
@@ -100,6 +113,15 @@ export class AuthService {
         TTL_MS,
       ),
       this.saveSessions(user.userId, sessions),
+      this.prisma.session.create({
+        data: {
+          userId: user.userId,
+          jti,
+          ip: meta?.ip ?? undefined,
+          userAgent: meta?.userAgent ?? undefined,
+          deviceName: meta?.deviceName ?? undefined,
+        },
+      }),
     ]);
     return { access_token };
   }
@@ -111,9 +133,12 @@ export class AuthService {
    * @returns 登出结果，含被撤销的 jti 及剩余会话数
    */
   async logout(userId: string, jti: string): Promise<LogoutResult> {
-    await this.cacheManager.del(
-      `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${userId}:${jti}`,
-    );
+    await Promise.all([
+      this.cacheManager.del(
+        `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${userId}:${jti}`,
+      ),
+      this.prisma.session.deleteMany({ where: { jti } }),
+    ]);
     const sessions = await this.getSessions(userId);
     const filtered = sessions.filter((id) => id !== jti);
     if (filtered.length > 0) {
@@ -141,6 +166,7 @@ export class AuthService {
         ),
       ),
       this.cacheManager.del(`${CACHE_KEY_PREFIX.USER_SESSIONS}${userId}`),
+      this.prisma.session.deleteMany({ where: { userId } }),
     ]);
     return {
       message: '已登出全部设备',

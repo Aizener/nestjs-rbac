@@ -1,4 +1,6 @@
-import { Controller, Post, Request, UseGuards } from '@nestjs/common';
+import type { Request } from 'express';
+
+import { Controller, Post, Req, UseGuards } from '@nestjs/common';
 
 import {
   AuthService,
@@ -16,16 +18,16 @@ export class AuthController {
 
   @Post('login')
   @UseGuards(LocalAuthGuard)
-  async login(
-    @Request() req: Request & { user: AuthUser },
-  ): Promise<TokenPair> {
-    return this.authService.login(req.user);
+  async login(@Req() req: Request & { user: AuthUser }): Promise<TokenPair> {
+    const ip = req.ip ?? req.socket?.remoteAddress ?? undefined;
+    const userAgent = req.get?.('User-Agent') ?? undefined;
+    return this.authService.login(req.user, { ip, userAgent });
   }
 
   @Post('logout')
   @UseGuards(JwtAuthGuard)
   async logout(
-    @Request() req: Request & { user: AuthUser & { jti: string } },
+    @Req() req: Request & { user: AuthUser & { jti: string } },
   ): Promise<LogoutResult> {
     return this.authService.logout(req.user.userId, req.user.jti);
   }
@@ -33,7 +35,7 @@ export class AuthController {
   @Post('logout-all')
   @UseGuards(JwtAuthGuard)
   async logoutAll(
-    @Request() req: Request & { user: AuthUser },
+    @Req() req: Request & { user: AuthUser },
   ): Promise<LogoutAllResult> {
     return this.authService.logoutAll(req.user.userId);
   }
