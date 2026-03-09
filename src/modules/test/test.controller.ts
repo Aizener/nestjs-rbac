@@ -12,6 +12,13 @@ import {
   Request as Req,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiOperation,
+  ApiQuery,
+  ApiResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 
 import type { AuthUser, TokenPair } from '../auth/auth.service';
 import { AuthService } from '../auth/auth.service';
@@ -22,6 +29,7 @@ import { TestService } from './test.service';
 
 type RequestWithUser = Request & { user: AuthUser };
 
+@ApiTags('测试/调试')
 @Controller('test')
 export class TestController {
   constructor(
@@ -32,11 +40,15 @@ export class TestController {
   ) {}
 
   @Get()
+  @ApiOperation({ summary: '健康检查' })
+  @ApiResponse({ status: 200, description: '成功' })
   getHello(): { msg: string } {
     return this.testService.getHello();
   }
 
   @Get('prisma')
+  @ApiOperation({ summary: 'Prisma 测试', description: '调试用，返回所有用户' })
+  @ApiResponse({ status: 200, description: '成功' })
   async getPrisma(): Promise<{ msg: string; users: User[] }> {
     const users = await this.prismaService.user.findMany();
     return { msg: `Found ${users.length} users`, users };
@@ -44,25 +56,45 @@ export class TestController {
 
   @UseGuards(LocalAuthGuard)
   @Post('auth/login')
+  @ApiOperation({
+    summary: '测试登录',
+    description: '与 /auth/login 相同，调试用',
+  })
+  @ApiResponse({ status: 201, description: '登录成功' })
+  @ApiResponse({ status: 401, description: '用户名或密码错误' })
   async login(@Req() req: RequestWithUser): Promise<TokenPair> {
     return this.authService.login(req.user);
   }
 
   @UseGuards(JwtAuthGuard)
   @Get('profile')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: '测试 profile', description: '返回当前用户信息' })
+  @ApiResponse({ status: 200, description: '成功' })
+  @ApiResponse({ status: 401, description: '未登录' })
   getProfile(@Req() req: RequestWithUser): AuthUser {
     return req.user;
   }
 
-  /** 调试：根据 key 查看缓存值，如 ?key=access_token:1:jti 或 ?key=user_sessions:1 */
   @Get('cache')
+  @ApiOperation({
+    summary: '查看缓存',
+    description: '调试用，根据 key 查看缓存值',
+  })
+  @ApiQuery({
+    name: 'key',
+    description: '缓存 key',
+    example: 'access_token:userId:jti',
+  })
+  @ApiResponse({ status: 200, description: '成功' })
   async getCache(@Query('key') key: string) {
     const value = await this.cacheManager.get(key);
     return { key, value: value ?? null };
   }
 
-  /** 调试：查看所有缓存条目 */
   @Get('cache/all')
+  @ApiOperation({ summary: '查看所有缓存', description: '调试用' })
+  @ApiResponse({ status: 200, description: '成功' })
   async getAllCache(): Promise<Record<string, unknown>> {
     const cache = this.cacheManager as {
       stores?: Array<{ iterator?: () => AsyncGenerator<[string, unknown]> }>;

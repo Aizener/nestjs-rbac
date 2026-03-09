@@ -1,6 +1,10 @@
 import type { Session } from 'generated/prisma/client';
 
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 
 import { AuthService } from '../auth/auth.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -23,7 +27,9 @@ export class SessionsService {
   ) {}
 
   /** 获取当前用户的设备列表（按登录时间倒序） */
-  async findMySessions(userId: string): Promise<Pick<Session, keyof typeof SESSION_SELECT>[]> {
+  async findMySessions(
+    userId: string,
+  ): Promise<Pick<Session, keyof typeof SESSION_SELECT>[]> {
     return this.prisma.session.findMany({
       where: { userId },
       select: SESSION_SELECT,
@@ -38,7 +44,8 @@ export class SessionsService {
       select: { userId: true },
     });
     if (!session) throw new NotFoundException('会话不存在');
-    if (session.userId !== userId) throw new ForbiddenException('无权限操作该会话');
+    if (session.userId !== userId)
+      throw new ForbiddenException('无权限操作该会话');
     await this.authService.logout(userId, jti);
     return { message: '已踢掉该设备' };
   }
@@ -54,7 +61,8 @@ export class SessionsService {
       select: { userId: true },
     });
     if (!session) throw new NotFoundException('会话不存在');
-    if (session.userId !== userId) throw new ForbiddenException('无权限操作该会话');
+    if (session.userId !== userId)
+      throw new ForbiddenException('无权限操作该会话');
     return this.prisma.session.update({
       where: { jti },
       data: { deviceName: deviceName ?? null },

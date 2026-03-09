@@ -146,11 +146,11 @@ src/
 
 ## 接口说明
 
-| 接口 | 方法 | 说明 | 需要认证 |
-|------|------|------|----------|
-| `/api/v1/auth/login` | POST | 登录，返回 access_token | 否 |
-| `/api/v1/auth/logout` | POST | 登出当前设备 | 是（Bearer） |
-| `/api/v1/auth/logout-all` | POST | 登出全部设备 | 是（Bearer） |
+| 接口                      | 方法 | 说明                    | 需要认证     |
+| ------------------------- | ---- | ----------------------- | ------------ |
+| `/api/v1/auth/login`      | POST | 登录，返回 access_token | 否           |
+| `/api/v1/auth/logout`     | POST | 登出当前设备            | 是（Bearer） |
+| `/api/v1/auth/logout-all` | POST | 登出全部设备            | 是（Bearer） |
 
 ## 前端接入步骤
 
@@ -162,7 +162,7 @@ const res = await fetch('http://localhost:3000/api/v1/auth/login', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    username: 'admin',   // passport-local 默认字段名
+    username: 'admin', // passport-local 默认字段名
     password: 'admin123',
   }),
 });

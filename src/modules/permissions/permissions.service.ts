@@ -98,7 +98,10 @@ export class PermissionsService {
   }
 
   /** 更新权限；若修改 subject/action 导致与其它记录重复则 409 */
-  async update(id: string, dto: UpdatePermissionDto): Promise<PermissionResult> {
+  async update(
+    id: string,
+    dto: UpdatePermissionDto,
+  ): Promise<PermissionResult> {
     const existing = await this.prisma.permission.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('权限不存在');
     if (dto.subject != null || dto.action != null) {

@@ -150,6 +150,7 @@ npm run build
 项目使用 Zod 进行环境变量校验，配置文件位于 `src/config/env.config.ts`。
 
 必需环境变量：
+
 - `PORT`: 服务端口（默认 3000）
 - `ALLOWED_ORIGINS`: 允许的 CORS 来源（逗号分隔）
 
@@ -163,6 +164,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ### 全局配置
 
 应用入口 `main.ts` 中配置了：
+
 - 全局前缀：`api`
 - API 版本控制：URI 版本，默认 v1
 - CORS：允许携带凭证
@@ -180,6 +182,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 ## 项目阶段规划
 
 ### v0.1（基础版本）
+
 - [ ] 用户模块
 - [ ] 角色模块
 - [ ] 权限模块
@@ -187,11 +190,13 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 - [ ] RBAC Guard
 
 ### v0.2（增强版本）
+
 - [ ] 权限缓存（Redis）
 - [ ] 超级管理员
 - [ ] Swagger 文档
 
 ### v1.0（企业版）
+
 - [ ] 完整企业级 RBAC 模板
 - [ ] 审计日志
 - [ ] 基于资源的动态权限
