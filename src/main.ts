@@ -16,7 +16,6 @@ async function bootstrap() {
     defaultVersion: '1',
   });
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call
   app.use(cookieParser());
 
   app.enableCors({

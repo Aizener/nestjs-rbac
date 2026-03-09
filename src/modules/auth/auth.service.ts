@@ -134,9 +134,7 @@ export class AuthService {
    */
   async logout(userId: string, jti: string): Promise<LogoutResult> {
     await Promise.all([
-      this.cacheManager.del(
-        `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${userId}:${jti}`,
-      ),
+      this.cacheManager.del(`${CACHE_KEY_PREFIX.ACCESS_TOKEN}${userId}:${jti}`),
       this.prisma.session.deleteMany({ where: { jti } }),
     ]);
     const sessions = await this.getSessions(userId);

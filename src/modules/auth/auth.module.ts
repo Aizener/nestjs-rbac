@@ -8,6 +8,7 @@ import { UsersModule } from '../users/users.module';
 import { JWT_EXPIRES_IN } from './auth.config';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { SessionCleanupService } from './session-cleanup.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { LocalStrategy } from './strategies/local.strategy';
 
@@ -21,7 +22,7 @@ import { LocalStrategy } from './strategies/local.strategy';
       signOptions: { expiresIn: JWT_EXPIRES_IN },
     }),
   ],
-  providers: [AuthService, LocalStrategy, JwtStrategy],
+  providers: [AuthService, LocalStrategy, JwtStrategy, SessionCleanupService],
   exports: [AuthService],
 })
 export class AuthModule {}
