@@ -7,8 +7,11 @@
  * - 过期后需重新登录（无 refresh）
  */
 
-/** Token 过期时间（秒） */
+/** Token 过期时间（秒），未勾选「记住我」时使用 */
 export const TOKEN_EXPIRY = 86400; // 24 小时
+
+/** 「记住我」时 Token 过期时间（秒） */
+export const REMEMBER_ME_EXPIRY = 604800; // 7 天
 
 /** 缓存 key 前缀 */
 export const CACHE_KEY_PREFIX = {
@@ -19,5 +22,5 @@ export const CACHE_KEY_PREFIX = {
 /** 每用户最大会话数，超出时踢掉最旧 */
 export const MAX_SESSIONS_PER_USER = 5;
 
-/** JwtModule 所需格式 */
-export const JWT_EXPIRES_IN = `${TOKEN_EXPIRY}s`;
+/** JwtModule 所需格式（取最长有效期，实际登录时按 rememberMe 动态设置） */
+export const JWT_EXPIRES_IN = `${REMEMBER_ME_EXPIRY}s`;

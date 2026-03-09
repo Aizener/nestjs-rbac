@@ -2,13 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { TOKEN_EXPIRY } from './auth.config';
+import { REMEMBER_ME_EXPIRY } from './auth.config';
 
 const MS_PER_SECOND = 1000;
 
 /**
  * Session 定时清理：删除 loginAt 超过 token 有效期的 Session 记录。
  * 缓存中的 token 由 TTL 自动过期，Session 表需定时清理以保持一致性。
+ * 使用最长有效期（记住我 = 7 天），避免过早删除仍有效的会话。
  */
 @Injectable()
 export class SessionCleanupService {
@@ -25,7 +26,7 @@ export class SessionCleanupService {
    */
   @Cron('* * * * *')
   async handleExpiredSessions(): Promise<void> {
-    const tokenExpiryMs = TOKEN_EXPIRY * MS_PER_SECOND;
+    const tokenExpiryMs = REMEMBER_ME_EXPIRY * MS_PER_SECOND;
     const cutoff = new Date(Date.now() - tokenExpiryMs);
 
     const result = await this.prisma.session.deleteMany({

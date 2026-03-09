@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { CaslAbilityFactory } from '../casl/casl-ability.factory';
 import { PrismaService } from '../prisma/prisma.service';
 import type { CreateRoleDto } from './dto/create-role.dto';
 import type { UpdateRoleDto } from './dto/update-role.dto';
@@ -49,7 +50,10 @@ export type RoleWithPermissionsResult = RoleResult & {
  */
 @Injectable()
 export class RolesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly caslAbility: CaslAbilityFactory,
+  ) {}
 
   /** 全量角色列表，按名称排序 */
   async findAll(): Promise<RoleResult[]> {
@@ -170,7 +174,10 @@ export class RolesService {
     });
   }
 
-  /** 将角色的权限列表整体替换为 permissionIds（先删后插），用于 PUT :id/permissions */
+  /**
+   * 将角色的权限列表整体替换为 permissionIds（先删后插），用于 PUT :id/permissions。
+   * 权限变更后会使拥有该角色的所有用户 Casl 缓存失效，确保立即生效。
+   */
   async assignPermissions(
     roleId: string,
     permissionIds: string[],
@@ -190,6 +197,8 @@ export class RolesService {
         skipDuplicates: true,
       });
     }
+    // 角色权限变更后，使拥有该角色的所有用户 Casl 缓存失效，避免旧权限继续生效
+    await this.caslAbility.invalidateCacheForRole(roleId);
     return this.findOneById(roleId);
   }
 

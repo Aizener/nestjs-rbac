@@ -1,12 +1,13 @@
 import {
   AbilityBuilder,
-  createMongoAbility,
   type MongoAbility,
+  createMongoAbility,
 } from '@casl/ability';
 
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable } from '@nestjs/common';
 
+import { extractPermissionRules } from '../../common/permission.util';
 import { PrismaService } from '../prisma/prisma.service';
 
 /** 能力缓存所需接口，与 cache-manager / Keyv 兼容（ttl 单位毫秒） */
@@ -21,7 +22,7 @@ export type AppAction = string;
 export type AppSubject = string;
 export type AppAbility = MongoAbility<[AppAction, AppSubject]>;
 
-/** 可序列化权限规则，用于缓存 */
+/** 可序列化权限规则，用于缓存（与 common/permission.util 的 PermissionRule 一致） */
 export type PermissionRule = { action: string; subject: string };
 
 /** 用户权限查询的 select 形状，仅拉取 CASL 所需的 subject/action，减少内存与 IO */
@@ -94,19 +95,7 @@ export class CaslAbilityFactory {
 
     if (!user) return [];
 
-    const seen = new Set<string>();
-    const rules: PermissionRule[] = [];
-    for (const ur of user.roles) {
-      for (const rp of ur.role.permissions) {
-        const { subject, action } = rp.permission;
-        const key = `${action}:${subject}`;
-        if (!seen.has(key)) {
-          seen.add(key);
-          rules.push({ action, subject });
-        }
-      }
-    }
-    return rules;
+    return extractPermissionRules(user);
   }
 
   /**
@@ -125,5 +114,21 @@ export class CaslAbilityFactory {
    */
   async invalidateCacheForUser(userId: string): Promise<void> {
     await this.cache.del(`${CACHE_KEY_PREFIX}${userId}`);
+  }
+
+  /**
+   * 使拥有指定角色的所有用户的能力缓存失效。
+   * 在角色权限变更（assignPermissions、replace、update 等）后调用，
+   * 确保权限变更立即生效，避免缓存导致的安全漏洞。
+   * @param roleId - 角色 ID
+   */
+  async invalidateCacheForRole(roleId: string): Promise<void> {
+    const userRoles = await this.prisma.userRole.findMany({
+      where: { roleId },
+      select: { userId: true },
+    });
+    await Promise.all(
+      userRoles.map((ur) => this.invalidateCacheForUser(ur.userId)),
+    );
   }
 }

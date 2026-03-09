@@ -6,11 +6,13 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Inject, Injectable } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 
+import { extractPermissionRules } from '../../common/permission.util';
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import {
   CACHE_KEY_PREFIX,
   MAX_SESSIONS_PER_USER,
+  REMEMBER_ME_EXPIRY,
   TOKEN_EXPIRY,
 } from './auth.config';
 
@@ -25,6 +27,8 @@ export interface SessionMeta {
   ip?: string;
   userAgent?: string;
   deviceName?: string;
+  /** 勾选「记住我」时延长 token 与缓存 TTL */
+  rememberMe?: boolean;
 }
 
 /** 登录成功返回的 token 结构 */
@@ -52,8 +56,26 @@ export interface LogoutAllResult {
   revokedJtis: string[];
 }
 
+/**
+ * 当前用户信息（GET /auth/me 返回结构）
+ * 供前端渲染菜单、按钮权限等，仅需登录即可获取，不要求 read User 权限
+ */
+export interface MeResult {
+  id: string;
+  username: string;
+  email: string | null;
+  emailVerifiedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  /** 用户拥有的角色列表 */
+  roles: { id: string; name: string }[];
+  /** 去重后的权限列表（subject + action），与 CASL 一致 */
+  permissions: { subject: string; action: string }[];
+}
+
 const MS_PER_SECOND = 1000;
-const TTL_MS = TOKEN_EXPIRY * MS_PER_SECOND;
+/** user_sessions 列表缓存 TTL，取最长有效期，确保列表不早于任意会话过期 */
+const USER_SESSIONS_TTL_MS = REMEMBER_ME_EXPIRY * MS_PER_SECOND;
 
 /** 认证服务：登录、登出、token 校验及多设备会话管理 */
 @Injectable()
@@ -82,9 +104,10 @@ export class AuthService {
   /**
    * 登录：生成 access_token 并存入缓存与 Session 表，支持多设备
    * @param user - 已校验用户信息
-   * @param meta - 可选会话元数据（ip、userAgent、deviceName），用于 Session 表
+   * @param meta - 可选会话元数据（ip、userAgent、deviceName、rememberMe），用于 Session 表
    * @returns 包含 access_token 的对象
    * @remarks 超出最大会话数时踢掉最旧会话（缓存 + Session 表同步删除）
+   * @remarks rememberMe 为 true 时 token 与缓存 TTL 延长为 7 天，否则 24 小时
    */
   async login(user: AuthUser, meta?: SessionMeta): Promise<TokenPair> {
     const jti = randomUUID();
@@ -101,16 +124,20 @@ export class AuthService {
     }
     sessions.unshift(jti);
 
+    // 勾选「记住我」时延长 token 与缓存 TTL，二者需保持一致
+    const expirySec = meta?.rememberMe ? REMEMBER_ME_EXPIRY : TOKEN_EXPIRY;
+    const tokenTtlMs = expirySec * MS_PER_SECOND;
+
     const access_token = await this.jwtService.signAsync(
       { sub: user.userId, username: user.username, jti },
-      { expiresIn: TOKEN_EXPIRY },
+      { expiresIn: expirySec },
     );
 
     await Promise.all([
       this.cacheManager.set(
         `${CACHE_KEY_PREFIX.ACCESS_TOKEN}${user.userId}:${jti}`,
         access_token,
-        TTL_MS,
+        tokenTtlMs,
       ),
       this.saveSessions(user.userId, sessions),
       this.prisma.session.create({
@@ -174,6 +201,55 @@ export class AuthService {
   }
 
   /**
+   * 获取当前登录用户信息（含角色、权限）
+   * 仅需 JWT 有效即可调用，不要求 read User 权限，供前端渲染菜单/按钮等
+   * @param userId - 用户 ID（来自 JWT sub）
+   * @returns 用户基本信息 + 角色列表 + 去重后的权限列表，用户不存在时返回 null
+   */
+  async getMe(userId: string): Promise<MeResult | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        emailVerifiedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        roles: {
+          select: {
+            role: {
+              select: {
+                id: true,
+                name: true,
+                permissions: {
+                  select: {
+                    permission: { select: { subject: true, action: true } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!user) return null;
+
+    const permissions = extractPermissionRules(user);
+
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      emailVerifiedAt: user.emailVerifiedAt,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      roles: user.roles.map((ur) => ({ id: ur.role.id, name: ur.role.name })),
+      permissions,
+    };
+  }
+
+  /**
    * 校验 token 是否在缓存中且与请求一致
    * @param userId - 用户 ID
    * @param jti - JWT ID
@@ -213,6 +289,7 @@ export class AuthService {
    * 保存用户会话 jti 列表到缓存
    * @param userId - 用户 ID
    * @param sessions - jti 数组（最新在前）
+   * @remarks 使用最长有效期 TTL，确保列表不早于任意会话过期
    */
   private async saveSessions(
     userId: string,
@@ -221,7 +298,7 @@ export class AuthService {
     await this.cacheManager.set(
       `${CACHE_KEY_PREFIX.USER_SESSIONS}${userId}`,
       JSON.stringify(sessions),
-      TTL_MS,
+      USER_SESSIONS_TTL_MS,
     );
   }
 }
