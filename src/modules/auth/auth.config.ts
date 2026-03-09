@@ -8,7 +8,7 @@
  */
 
 /** Token 过期时间（秒） */
-export const TOKEN_EXPIRY = 60; // 86400; // 24 小时
+export const TOKEN_EXPIRY = 86400; // 24 小时
 
 /** 缓存 key 前缀 */
 export const CACHE_KEY_PREFIX = {
