@@ -8,6 +8,8 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 
+import { env } from '../../config/env.config';
+
 @Injectable()
 export class PrismaService
   extends PrismaClient
@@ -17,7 +19,7 @@ export class PrismaService
 
   constructor() {
     const adapter = new PrismaPg({
-      connectionString: process.env.DATABASE_URL!,
+      connectionString: env.DATABASE_URL,
     });
     super({ adapter });
   }
